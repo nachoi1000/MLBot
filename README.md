@@ -121,8 +121,8 @@ Asegúrate de tener instalado lo siguiente:
 
 1.  **Clona el repositorio:**
     ```bash
-    git clone [https://github.com/nachoi1000/scanntech_rag.git](https://github.com/nachoi1000/scanntech_rag.git)
-    cd scanntech_rag
+    git clone [https://github.com/nachoi1000/MLBot.git](https://github.com/nachoi1000/MLBot.git)
+    cd MLBot
     ```
 
 2.  **Crea y configura tu archivo de entorno:**
