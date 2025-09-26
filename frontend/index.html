@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuantumChain's Bot</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #333333;
+            --input-bg: #f0f0f0;
+            --button-bg: #3498db;
+            --button-text: #ffffff;
+            --send-button-bg: #2ecc71;
+            --reset-button-bg: #e74c3c;
+            --source-bg: #e9ecef;
+            --source-border: #dee2e6;
+            --source-text: #495057;
+        }
+        .dark-mode {
+            --bg-color: #333333;
+            --text-color: #ffffff;
+            --input-bg: #555555;
+            --source-bg: #495057;
+            --source-border: #6c757d;
+            --source-text: #f8f9fa;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 600px;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        #mode-switch {
+            background-color: transparent;
+            border: none;
+            cursor: pointer;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        #mode-switch svg {
+            width: 24px;
+            height: 24px;
+            color: var(--text-color);
+        }
+        .chat-wrapper {
+            width: 100%;
+            height: 70vh;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--text-color);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        #messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 80%;
+            display: flex;
+            align-items: flex-start;
+            overflow-wrap: break-word;
+        }
+        .message-icon {
+            margin-right: 10px;
+            min-width: 24px;
+        }
+        .message-content {
+            flex-grow: 1;
+            min-width: 0;
+        }
+        .message-content a {
+            color: #0056b3;
+            text-decoration: underline;
+        }
+        .user-message {
+            background-color: #e1f5fe;
+            color: #01579b;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            align-self: flex-end;
+            margin-left: auto;
+            white-space: pre-wrap;
+        }
+        .bot-message {
+            background-color: #f0f4c3;
+            color: #33691e;
+            font-family: 'Courier New', Courier, monospace;
+            align-self: flex-start;
+            white-space: pre-wrap;
+        }
+        .input-area {
+            display: flex;
+            padding: 10px;
+            background-color: var(--input-bg);
+        }
+        #user-input {
+            flex-grow: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: inherit;
+            font-size: 1em;
+            resize: none;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-left: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        button svg {
+            margin-right: 5px;
+        }
+        #send-button {
+            background-color: var(--send-button-bg);
+            color: white;
+        }
+        #reset-button {
+            background-color: var(--reset-button-bg);
+            color: white;
+        }
+        .remaining-messages {
+            text-align: center;
+            padding: 10px;
+            background-color: var(--input-bg);
+            border-top: 1px solid var(--text-color);
+            font-size: 14px;
+        }
+        #send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .sources-container {
+            margin-top: 10px;
+            border-top: 1px solid var(--source-border);
+        }
+        
+        .sources-container summary {
+            font-weight: bold;
+            font-size: 0.9em;
+            padding: 8px 0;
+            cursor: pointer;
+        }
+
+        .source-item details {
+            font-size: 0.8em;
+            background-color: var(--source-bg);
+            color: var(--source-text);
+            border-radius: 4px;
+            margin-bottom: 5px;
+            border: 1px solid var(--source-border);
+        }
+        
+        .source-item summary {
+            padding: 5px;
+            display: flex;
+            align-items: center;
+        }
+
+        .source-item svg {
+            width: 14px;
+            height: 14px;
+            margin-right: 5px;
+            flex-shrink: 0;
+        }
+
+        .chunk-detail {
+            padding: 8px;
+            margin: 0 8px 8px 8px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            border-radius: 4px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 0.95em;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <button id="mode-switch" onclick="toggleDarkMode()">
+            <i data-lucide="sun" class="light-icon"></i>
+            <i data-lucide="moon" class="dark-icon" style="display: none;"></i>
+        </button>
+        <div class="chat-wrapper">
+            <div id="messages"></div>
+            <div class="input-area">
+                <textarea id="user-input" placeholder="Type your message..." rows="2"></textarea>
+                <button id="send-button" onclick="sendMessage()">
+                    <i data-lucide="send"></i> Send
+                </button>
+                <button id="reset-button" onclick="resetChat()">
+                    <i data-lucide="refresh-cw"></i> Reset
+                </button>
+            </div>
+            <div id="remaining-messages" class="remaining-messages">
+                Available Messages: <span id="remaining-count">10</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let conversationId = null;
+        let isDarkMode = false;
+        let remainingMessages = 10;
+        let isWaitingForResponse = false;
+
+        async function createConversation() {
+            const response = await fetch('/conversation', { method: 'POST' });
+            const data = await response.json();
+            conversationId = data.conversation_id;
+            
+            const welcomeMessage = "Hello and welcome to QuantumChain Technologies! 🚀\nI'm your virtual assistant, here to help you with anything related to our AI, blockchain, and cybersecurity solutions.\n\nHow can I assist you today?";
+            addMessage({ answer: welcomeMessage, sources: [] }, 'bot-message');
+        }
+
+        async function sendMessage() {
+            const userInput = document.getElementById('user-input').value;
+            if (!userInput.trim() || remainingMessages === 0 || isWaitingForResponse) return;
+
+            isWaitingForResponse = true;
+            updateSendButtonState();
+
+            addMessage({ answer: userInput }, 'user-message');
+            document.getElementById('user-input').value = '';
+
+            
+            if (!conversationId) {
+                await createConversation();
+            }
+
+            try {
+                const response = await fetch('/message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ conversation_id: conversationId, user_input: userInput }),
+                });
+                const data = await response.json();
+                addMessage(data, 'bot-message');
+                updateRemainingMessages(data.remaining_messages);
+            } catch (error) {
+                console.error('Error:', error);
+                addMessage({ answer: 'Sorry, there was an error processing your request.', sources: [] }, 'bot-message');
+            } finally {
+                isWaitingForResponse = false;
+                updateSendButtonState();
+            }
+        }
+        
+        function addMessage(data, className) {
+            const messagesContainer = document.getElementById('messages');
+            const messageWrapper = document.createElement('div');
+            messageWrapper.classList.add('message', className);
+
+            const iconElement = document.createElement('div');
+            iconElement.classList.add('message-icon');
+            iconElement.innerHTML = className === 'user-message' ? '<i data-lucide="user-circle"></i>' : '<i data-lucide="bot"></i>';
+
+            const contentElement = document.createElement('div');
+            contentElement.classList.add('message-content');
+            
+            if (className === 'bot-message') {
+                contentElement.innerHTML = marked.parse(data.answer);
+            } else {
+                contentElement.textContent = data.answer;
+            }
+
+            messageWrapper.appendChild(iconElement);
+            messageWrapper.appendChild(contentElement);
+            
+            if (className === 'bot-message' && data.sources && data.sources.length > 0) {
+                const sourcesContainer = document.createElement('details');
+                sourcesContainer.className = 'sources-container';
+                
+                const title = document.createElement('summary');
+                title.textContent = 'Sources:';
+                sourcesContainer.appendChild(title);
+
+                data.sources.forEach(source => {
+                    const sourceDetails = document.createElement('details');
+                    sourceDetails.className = 'source-item';
+                    
+                    const sourceSummary = document.createElement('summary');
+                    
+                    const docName = source.metadata?.document_name || 'Unknown Document';
+                    const page = source.metadata?.start_page;
+                    const score = source.score ? `(Score: ${source.score.toFixed(2)})` : '';
+                    const pageInfo = page ? ` - Page ${page}` : '';
+                    
+                    sourceSummary.innerHTML = `
+                        <i data-lucide="file-text"></i>
+                        <span>${docName}${pageInfo} ${score}</span>
+                    `;
+                    
+                    const chunkContent = document.createElement('pre');
+                    chunkContent.className = 'chunk-detail';
+                    chunkContent.textContent = source.text || 'No content available for this chunk.';
+
+                    sourceDetails.appendChild(sourceSummary);
+                    sourceDetails.appendChild(chunkContent);
+                    sourcesContainer.appendChild(sourceDetails);
+                });
+                
+                contentElement.appendChild(sourcesContainer);
+            }
+
+            messagesContainer.appendChild(messageWrapper);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+            lucide.createIcons();
+        }
+
+        function resetChat() {
+            document.getElementById('messages').innerHTML = '';
+            conversationId = null;
+            updateRemainingMessages(10);
+            isWaitingForResponse = false;
+            updateSendButtonState();
+            createConversation();
+        }
+
+        function toggleDarkMode() {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('dark-mode');
+            updateModeIcon();
+        }
+
+        function updateModeIcon() {
+            const lightIcon = document.querySelector('.light-icon');
+            const darkIcon = document.querySelector('.dark-icon');
+            lightIcon.style.display = isDarkMode ? 'none' : 'block';
+            darkIcon.style.display = isDarkMode ? 'block' : 'none';
+        }
+
+        function updateRemainingMessages(count) {
+            remainingMessages = count;
+            document.getElementById('remaining-count').textContent = count;
+            updateSendButtonState();
+        }
+
+        function updateSendButtonState() {
+            const sendButton = document.getElementById('send-button');
+            sendButton.disabled = remainingMessages === 0 || isWaitingForResponse;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            createConversation();
+            lucide.createIcons();
+            updateRemainingMessages(10);
+
+            document.getElementById("user-input").addEventListener("keydown", function(event) {
+                if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    document.getElementById("send-button").click();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
