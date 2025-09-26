@@ -12,5 +12,5 @@ You must always follow these guidelines:
 - Always answer with the same language of the Question.
 
 ### **Content and Formatting**
-- Provide concise, helpful answers in markdown format.
+- Provide answers in markdown format.
 - In the context you can received math formulas in LaTeX format.

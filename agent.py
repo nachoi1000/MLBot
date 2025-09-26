@@ -12,13 +12,12 @@ from utils.retriever_factory import MarkdownParentRetrieverSetup
 from utils.file_manager import FileManager
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
+load_dotenv()
 
 def create_agent_graph():
     """
     Función que encapsula la creación y compilación del grafo del agente.
     """
-    load_dotenv()
     llm = ChatOpenAI(model_name=os.getenv("OPENAI_MODEL"), temperature=0)
     file_manager = FileManager()
     rag_system_prompt = file_manager.load_md_file("prompt/rag.md")
@@ -29,6 +28,8 @@ def create_agent_graph():
         collection_name="rag_langgraph_prod_v2"
     )
     retriever = retriever_factory.get_retriever()
+    if retriever:
+        retriever.search_kwargs = {'k': int(os.getenv("K"))}
 
     # --- DEFINICIÓN DEL ESTADO DEL GRAFO ---
     class GraphState(TypedDict):
@@ -47,7 +48,7 @@ def create_agent_graph():
         # Si la longitud de 'messages' es 1, significa que solo contiene la primera pregunta del usuario.
         if len(state["messages"]) == 1:
             user_question = state["messages"][0].content
-            print(f"    Primer mensaje, usando directamente: '{user_question}'")
+            logging.info(f"    Primer mensaje, usando directamente: '{user_question}'")
             return {"question": user_question}
         
         # Si hay más de un mensaje, significa que es una repregunta y necesita contexto.
@@ -69,8 +70,8 @@ def create_agent_graph():
             "question": user_question
         })
         
-        print(f"    Pregunta original: '{user_question}'")
-        print(f"    Pregunta reescrita: '{response.content}'")
+        logging.info(f"    Pregunta original: '{user_question}'")
+        logging.info(f"    Pregunta reescrita: '{response.content}'")
 
         return {"question": response.content}
 
@@ -115,20 +116,6 @@ def create_agent_graph():
     app = workflow.compile()
     return app
 
-# Creamos la instancia del agente una sola vez cuando el módulo se carga
+
 agent_app = create_agent_graph()
 
-# El bloque if __name__ == "__main__": es útil para probar este archivo de forma aislada
-if __name__ == "__main__":
-    print("Probando el agente de forma aislada...")
-    config = {"configurable": {"thread_id": "test-thread-1"}}
-    # Primera pregunta
-    for _ in agent_app.stream({"input": "Explica el concepto de 'dropout'", "chat_history": []}, config):
-        pass
-    final_state = agent_app.get_state(config)
-    print(f"🤖 AI: {final_state.values['chat_history'][-1].content}")
-    # Segunda pregunta
-    for _ in agent_app.stream({"input": "¿y por qué es importante?"}, config):
-        pass
-    final_state = agent_app.get_state(config)
-    print(f"🤖 AI: {final_state.values['chat_history'][-1].content}")
