@@ -1,12 +1,13 @@
 import logging
 import os
+import operator
 from dotenv import load_dotenv
-from typing import List, TypedDict
+from typing import Annotated, List, TypedDict
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
+from langchain_core.documents import Document
 from langgraph.graph import END, StateGraph
-from langgraph.checkpoint.memory import MemorySaver
 from utils.retriever_factory import MarkdownParentRetrieverSetup
 from utils.file_manager import FileManager
 
@@ -29,31 +30,54 @@ def create_agent_graph():
     )
     retriever = retriever_factory.get_retriever()
 
-    # --- Definición de Estado y Nodos (sin cambios) ---
+    # --- DEFINICIÓN DEL ESTADO DEL GRAFO ---
     class GraphState(TypedDict):
-        input: str
-        chat_history: List[BaseMessage]
+        messages: Annotated[List[BaseMessage], operator.add]
         question: str
-        documents: List[str]
+        retrieved_chunks: List[Document]
 
     def rewrite_question(state: GraphState):
+        """
+        Reescribe la pregunta del usuario para que sea autónoma, usando el historial.
+        Si es el primer mensaje de la conversación, lo usa directamente.
+        """
         logging.info("--- 🧠 REESCRIBIENDO PREGUNTA ---")
-        # ... (código del nodo sin cambios)
+        
+        # Condición: ¿Es el primer mensaje de la conversación?
+        # Si la longitud de 'messages' es 1, significa que solo contiene la primera pregunta del usuario.
+        if len(state["messages"]) == 1:
+            user_question = state["messages"][0].content
+            print(f"    Primer mensaje, usando directamente: '{user_question}'")
+            return {"question": user_question}
+        
+        # Si hay más de un mensaje, significa que es una repregunta y necesita contexto.
+        user_question = state["messages"][-1].content
+        chat_history = state["messages"][:-1]
+
         prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", "Dada una conversación y una última pregunta del usuario, reformula la última pregunta para que sea una pregunta autónoma."),
+                ("system", "Dada la siguiente conversación y una pregunta, reformula la pregunta para que sea una pregunta autónoma que pueda ser entendida sin el historial del chat. NO respondas la pregunta, solo reformúlala."),
                 MessagesPlaceholder(variable_name="chat_history"),
-                ("human", "{input}"),
+                ("human", "Pregunta del usuario: {question}"),
             ]
         )
+        
         rewriter_chain = prompt | llm
-        rephrased_question = rewriter_chain.invoke(state)
-        return {"question": rephrased_question.content}
+        
+        response = rewriter_chain.invoke({
+            "chat_history": chat_history,
+            "question": user_question
+        })
+        
+        print(f"    Pregunta original: '{user_question}'")
+        print(f"    Pregunta reescrita: '{response.content}'")
+
+        return {"question": response.content}
 
     def retrieve_documents(state: GraphState):
         logging.info("--- 📚 RECUPERANDO DOCUMENTOS ---")
         documents = retriever.invoke(state["question"])
-        return {"documents": documents}
+        return {"retrieved_chunks": documents}
 
     def generate_answer(state: GraphState):
         logging.info("--- 🗣️ GENERANDO RESPUESTA ---")
@@ -61,18 +85,21 @@ def create_agent_graph():
             [
                 ("system", rag_system_prompt),
                 MessagesPlaceholder(variable_name="chat_history"),
-                ("human", "{input}"),
+                ("human", "{rewritten_question}"),
             ]
         )
+        
         rag_chain = prompt | llm
-        context_str = "\n".join([doc.page_content for doc in state["documents"]])
-        generation = rag_chain.invoke({
+        
+        context_str = "\n".join([doc.page_content for doc in state["retrieved_chunks"]])
+        
+        response = rag_chain.invoke({
             "context": context_str,
-            "input": state["input"],
-            "chat_history": state["chat_history"]
+            "chat_history": state["messages"][:-1],
+            "rewritten_question": state["question"]
         })
         # IMPORTANTE: Ya no actualizamos el historial aquí, LangGraph lo hará por nosotros.
-        return {"chat_history": [generation]} # Devolvemos solo el nuevo mensaje
+        return {"messages": [AIMessage(content=response.content)]}
 
     # --- Construcción y Compilación del Grafo ---
     workflow = StateGraph(GraphState)
@@ -85,9 +112,7 @@ def create_agent_graph():
     workflow.add_edge("retriever", "generator")
     workflow.add_edge("generator", END)
     
-    memory = MemorySaver()
-    app = workflow.compile(checkpointer=memory)
-    print("✅ Grafo compilado y listo para ser usado.")
+    app = workflow.compile()
     return app
 
 # Creamos la instancia del agente una sola vez cuando el módulo se carga
