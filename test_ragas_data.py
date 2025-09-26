@@ -335,5 +335,5 @@ def process_and_save_results(dataset: list, output_path: str):
 if __name__ == "__main__":
     # Llama a la función para procesar la lista y guardar los resultados
     processed_data_1 = process_and_save_results(formula_test, "formula_test.json")
-    processed_data_2 = process_and_save_results(general_test, "formula_test.json")
+    processed_data_2 = process_and_save_results(general_test, "general_test.json")
     
